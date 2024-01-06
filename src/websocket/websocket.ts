@@ -1,5 +1,3 @@
-
-
 class WS {
   private socket: WebSocket;
 

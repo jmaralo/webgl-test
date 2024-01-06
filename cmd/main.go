@@ -13,6 +13,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const BUFFER_SIZE = 5000
+
 var messageDelayF = flag.Duration("m", time.Millisecond*16, "message delay")
 var dataDelayF = flag.Duration("d", time.Microsecond, "data delay")
 var addressF = flag.String("l", "localhost:8080", "server address")
@@ -24,19 +26,24 @@ func main() {
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 
-	source := make(chan DataPoint, 5000)
-	channel := NewSPMC(source)
-	start := time.Now().UnixNano()
-	go func() {
-		ticker := time.NewTicker(*dataDelayF)
+	channel1 := newChannel(func(t int64) float64 {
+		return (math.Sin(float64(t) / 500000000)) / 2.0
+	})
 
-		for range ticker.C {
-			source <- DataPoint{
-				Data:      (math.Sin(float64(time.Now().UnixNano()-start) / 100000000)) / 2.0,
-				Timestamp: uint64(time.Now().UnixNano() - start),
-			}
+	channel2 := newChannel(func(t int64) float64 {
+		return (math.Cos(float64(t) / 500000000)) / 2.0
+	})
+
+	channel3 := newChannel(func(t int64) float64 {
+		d := (math.Tan(float64(t) / 500000000)) / 2.0
+		if d > 2 {
+			return 2
+		} else if d < -2 {
+			return -2
+		} else {
+			return d
 		}
-	}()
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -45,14 +52,23 @@ func main() {
 			return
 		}
 
-		data := make(chan DataPoint, 5000)
-		id := channel.AddDestination(data)
-		fmt.Println("New client: ", id)
-		go handleConn(conn, data, func() {
-			fmt.Println("Client disconnected: ", id)
-			channel.RemoveDestination(id)
-		})
+		data1 := make(chan DataPoint, BUFFER_SIZE)
+		id1 := channel1.AddDestination(data1)
 
+		data2 := make(chan DataPoint, BUFFER_SIZE)
+		id2 := channel2.AddDestination(data2)
+
+		data3 := make(chan DataPoint, BUFFER_SIZE)
+		id3 := channel3.AddDestination(data3)
+
+		fmt.Println("New client")
+
+		go handleConn(conn, data1, data2, data3, func() {
+			fmt.Println("Client disconnected")
+			channel1.RemoveDestination(id1)
+			channel2.RemoveDestination(id2)
+			channel3.RemoveDestination(id3)
+		})
 	})
 
 	fmt.Println("Server started on", *addressF)
@@ -64,32 +80,74 @@ type DataPoint struct {
 	Timestamp uint64  `json:"timestamp"`
 }
 
-func handleConn(conn *websocket.Conn, data <-chan DataPoint, onClose func()) {
+func handleConn(conn *websocket.Conn, data1, data2, data3 <-chan DataPoint, onClose func()) {
 	defer conn.Close()
 	defer onClose()
 
 	ticker := time.NewTicker(*messageDelayF)
-	nextMessage := make([]DataPoint, 0, 5000)
+	nextMessage1 := make([]DataPoint, 0, BUFFER_SIZE)
+	nextMessage2 := make([]DataPoint, 0, BUFFER_SIZE)
+	nextMessage3 := make([]DataPoint, 0, BUFFER_SIZE)
 	for {
 		select {
-		case d, ok := <-data:
+		case a, ok := <-data1:
 			if !ok {
 				return
 			}
-			nextMessage = append(nextMessage, d)
+			nextMessage1 = append(nextMessage1, a)
+		case b, ok := <-data2:
+			if !ok {
+				return
+			}
+			nextMessage2 = append(nextMessage2, b)
+		case c, ok := <-data3:
+			if !ok {
+				return
+			}
+			nextMessage3 = append(nextMessage3, c)
 		case <-ticker.C:
-			if len(nextMessage) == 0 {
+			if len(nextMessage1) == 0 && len(nextMessage2) == 0 {
 				continue
 			}
 
-			err := conn.WriteJSON(nextMessage)
+			err := conn.WriteJSON(message{
+				A: nextMessage1,
+				B: nextMessage2,
+				C: nextMessage3,
+			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error writing to websocket: %v\n", err)
 				return
 			}
-			nextMessage = make([]DataPoint, 0, 5000)
+			nextMessage1 = make([]DataPoint, 0, BUFFER_SIZE)
+			nextMessage2 = make([]DataPoint, 0, BUFFER_SIZE)
+			nextMessage3 = make([]DataPoint, 0, BUFFER_SIZE)
 		}
 	}
+}
+
+type message struct {
+	A []DataPoint `json:"a"`
+	B []DataPoint `json:"b"`
+	C []DataPoint `json:"c"`
+}
+
+func newChannel(data func(t int64) float64) *SPMC[DataPoint] {
+	source := make(chan DataPoint, BUFFER_SIZE)
+	channel := NewSPMC(source)
+	go func() {
+		ticker := time.NewTicker(*dataDelayF)
+
+		start := time.Now().UnixNano()
+		for range ticker.C {
+			t := time.Now().UnixNano() - start
+			source <- DataPoint{
+				Data:      data(t),
+				Timestamp: uint64(t),
+			}
+		}
+	}()
+	return channel
 }
 
 type SPMC[T any] struct {

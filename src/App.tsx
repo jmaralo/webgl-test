@@ -1,13 +1,22 @@
 import { useEffect } from 'react';
-import useWebGL from './hooks/useWebGL'
+import useWebGL, { point } from './hooks/useWebGL'
 import WS from './websocket/websocket';
 
+type Message = {
+  a: point[],
+  b: point[],
+  c: point[],
+}
+
 function App() {
-  const { canvasRef, setPoints } = useWebGL()
+  const { canvasRef, setPoints1, setPoints2, setPoints3 } = useWebGL()
 
   useEffect(() => {
-    const socket = new WS('ws://192.168.1.135:8080', (msg) => {
-      setPoints(JSON.parse(msg.data))
+    const socket = new WS('ws://localhost:8080', (msg) => {
+      const data = JSON.parse(msg.data) as Message;
+      setPoints1(data.a);
+      setPoints2(data.b);
+      setPoints3(data.c);
     });
 
     return () => {
