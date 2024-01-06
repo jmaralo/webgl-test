@@ -6,7 +6,7 @@ function App() {
   const { canvasRef, setPoints } = useWebGL()
 
   useEffect(() => {
-    const socket = new WS('ws://127.0.0.1:8080', (msg) => {
+    const socket = new WS('ws://192.168.1.135:8080', (msg) => {
       setPoints(JSON.parse(msg.data))
     });
 

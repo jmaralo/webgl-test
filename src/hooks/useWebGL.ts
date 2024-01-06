@@ -3,24 +3,17 @@ import ShaderProgram from "./webgl/shader";
 
 const vertexSource = `#version 300 es
 layout (location = 0) in vec2 iPosition;
+layout (location = 1) in vec2 iNormal;
+
+uniform float uWidth;
 
 out vec4 oColor;
 
-uniform float uTime;
-uniform float uCurrentTime;
-uniform float uMaxValue;
-uniform float uMinValue;
-
-float map(float value, float min1, float max1, float min2, float max2) {
-  return min2 + ((max2 - min2) * ((value - min1) / (max1 - min1)));
-}
-
 void main() {
-  float y = map(iPosition.x, uMinValue, uMaxValue, -1.0, 1.0);
-  float x = map(iPosition.y, uCurrentTime - uTime, uCurrentTime, -1.0, 1.0);
-  gl_Position = vec4(x, y, 0.0, 1.0);
+  vec2 p = iPosition + (normalize(iNormal) * uWidth / 2.0);
+  gl_Position = vec4(p, 0.0, 1.0);
 
-  oColor = vec4(map(y, -1.0, 1.0, 0.0, 1.0), 1.0, 1.0, 1.0);
+  oColor = vec4((p.y + 1.0) / 2.0 , 1.0, 1.0, 1.0);
 }
 `
 
@@ -41,10 +34,13 @@ type point = {
 }
 
 const MAX_POINT_N = 500000
+const MIN_DATA = -1.0
+const MAX_DATA = 1.0
+const TIME_WINDOW = 10000000000
+const VERTEX_PER_POINT = 16
 
 function useWebGL() {
   const points = useRef<point[]>([])
-  const timeWindow = 2000000000
   let updated = false;
 
   return {
@@ -61,14 +57,14 @@ function useWebGL() {
 
       gl.viewport(0, 0, canvas.width, canvas.height);
 
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.STENCIL_TEST);
+
       const program = new ShaderProgram(gl, [
         { type: "VERTEX", source: vertexSource },
         { type: "FRAGMENT", source: fragmentSource },
       ])
       program.use();
-      program.setUniform1f("uTime", timeWindow);
-      program.setUniform1f("uMaxValue", 1.0);
-      program.setUniform1f("uMinValue", -1.0);
 
       const vertexArray = gl.createVertexArray();
       if (!vertexArray) {
@@ -83,17 +79,11 @@ function useWebGL() {
         return
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(MAX_POINT_N * 2), gl.DYNAMIC_DRAW);
-      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 2 * 4, 0);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(MAX_POINT_N * VERTEX_PER_POINT), gl.DYNAMIC_DRAW);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 4 * 4, 0);
       gl.enableVertexAttribArray(0);
-
-      const vertexBuffer2 = gl.createBuffer();
-      if (!vertexBuffer2) {
-        alert("Failed to create vertex buffer")
-        return
-      }
-      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer2);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(MAX_POINT_N * 2), gl.DYNAMIC_DRAW);
+      gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 4 * 4, 2 * 4);
+      gl.enableVertexAttribArray(1);
 
       let lastTime = 0
       const render = (now: DOMHighResTimeStamp) => {
@@ -106,21 +96,39 @@ function useWebGL() {
         updated = false
         gl.bindVertexArray(vertexArray);
 
-        const pts = [...points.current];
-        const vertices = new Float32Array(min(MAX_POINT_N, pts.length) * 2)
-        for (let i = 1; i <= vertices.length / 2; i++) {
-          const pt = pts[pts.length - i]
-          vertices[vertices.length - (2 * i)] = pt.data
-          vertices[(vertices.length - (2 * i)) + 1] = pt.timestamp;
+        const pts = points.current.slice(-MAX_POINT_N);
+        const currentTime = pts[pts.length - 1].timestamp
+        const vertices = new Float32Array(pts.length * 16)
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = toVertex(pts[i], currentTime - TIME_WINDOW, currentTime, MIN_DATA, MAX_DATA)
+          const b = toVertex(pts[i + 1], currentTime - TIME_WINDOW, currentTime, MIN_DATA, MAX_DATA)
+          const n = getNormal(a, b)
+          const stride = i * 16
+          vertices[stride + 0] = a.x
+          vertices[stride + 1] = a.y
+          vertices[stride + 2] = n.x
+          vertices[stride + 3] = n.y
+          vertices[stride + 4] = a.x
+          vertices[stride + 5] = a.y
+          vertices[stride + 6] = -n.x
+          vertices[stride + 7] = -n.y
+          vertices[stride + 8] = b.x
+          vertices[stride + 9] = b.y
+          vertices[stride + 10] = n.x
+          vertices[stride + 11] = n.y
+          vertices[stride + 12] = b.x
+          vertices[stride + 13] = b.y
+          vertices[stride + 14] = -n.x
+          vertices[stride + 15] = -n.y
         }
-        console.log("drawing ", vertices.length / 2, " points in " , deltaTime, "ms")
+        console.log("drawing ", vertices.length / 4, " points in ", deltaTime, "ms")
         gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices);
 
         program.use()
-        program.setUniform1f("uCurrentTime", vertices[vertices.length - 1]);
+        program.setUniform1f("uWidth", (Math.sin(now / 100) + 1.2) * 0.005);
 
-        gl.drawArrays(gl.LINE_STRIP, 0, vertices.length / 2);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertices.length / 4);
 
         requestAnimationFrame(render)
       }
@@ -134,7 +142,7 @@ function useWebGL() {
       }
       const latest = newPoints[newPoints.length - 1].timestamp
       points.current = points.current.concat(newPoints).filter((pt) => {
-        return latest - pt.timestamp < timeWindow
+        return latest - pt.timestamp < TIME_WINDOW
       })
       updated = true
     },
@@ -143,7 +151,7 @@ function useWebGL() {
 
 function initContext(canvas: HTMLCanvasElement, options: WebGLContextAttributes = {
   alpha: false,
-  antialias: false,
+  antialias: true,
   depth: false,
   stencil: false,
   powerPreference: "high-performance",
@@ -158,8 +166,17 @@ function initContext(canvas: HTMLCanvasElement, options: WebGLContextAttributes 
   }
 }
 
-function min(a: number, b: number): number {
-  return a < b ? a : b
+type vertex = {
+  x: number,
+  y: number,
+}
+
+function getNormal(a: vertex, b: vertex): vertex {
+  return { x: a.y - b.y, y: b.x - a.x }
+}
+
+function toVertex(pt: point, tmin: number, tmax: number, dmin: number, dmax: number): vertex {
+  return { x: (((pt.timestamp - tmin) / (tmax - tmin)) * 2) - 1, y: (((pt.data - dmin) / (dmax - dmin)) * 2) - 1 }
 }
 
 export default useWebGL;
