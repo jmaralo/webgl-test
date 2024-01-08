@@ -1,3 +1,4 @@
+import { CanvasContext as Canvas2DContext, DrawingContext, WebGL2Context, WebGLContext } from "../context/context";
 import Series, { Point, SECOND, SeriesStyle } from "./series"
 
 export default class LineSeries implements Series {
@@ -25,101 +26,113 @@ export default class LineSeries implements Series {
 
   constructor() { }
 
-  draw(ctx: WebGL2RenderingContext | WebGLRenderingContext | CanvasRenderingContext2D): number {
-    if (ctx instanceof CanvasRenderingContext2D) {
-      return this.drawCanvas2D(ctx)
-    } else if (ctx instanceof WebGLRenderingContext) {
-      return this.drawWebGL(ctx)
-    } else if (ctx instanceof WebGL2RenderingContext) {
-      return this.drawWebGL2(ctx)
+  draw(ctx: DrawingContext): number {
+    switch (ctx.type) {
+      case "webgl2":
+        return this.drawWebGL2(ctx)
+      case "webgl":
+        return this.drawWebGL(ctx)
+      case "canvas2d":
+        return this.drawCanvas2D(ctx)
     }
 
     return 0
   }
 
-  private drawWebGL2(gl: WebGL2RenderingContext): number {
-    const vao = this.getVAO(gl)
-    gl.bindVertexArray(vao)
+  private drawWebGL2(c: WebGL2Context): number {
+    const vao = this.getVAO(c)
+    c.gl.bindVertexArray(vao)
 
     if (this.updated) {
       const buffer = this.getBuffer(this.maxPoints, this.points[this.points.length - 1].x)
 
-      const vbo = this.getVBO(gl)
-      gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, buffer)
+      const vbo = this.getVBO(c)
+      c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
+      c.gl.bufferSubData(c.gl.ARRAY_BUFFER, 0, buffer)
       this.bufferLength = buffer.length
     }
     this.updated = false;
 
+    c.program.use(c.gl)
+    c.program.setUniform1f(c.gl, "uWidth", this.style.width)
+    c.program.setUniform4f(c.gl, "uColor", this.style.colorR, this.style.colorG, this.style.colorB, this.style.colorA)
 
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.bufferLength / 4)
+    c.gl.drawArrays(c.gl.TRIANGLE_STRIP, 0, this.bufferLength / 4)
     return this.bufferLength / 4
   }
 
-  private drawWebGL(_: WebGLRenderingContext): number {
+  private drawWebGL(c: WebGLContext): number {
+    const vbo = this.getVBO(c)
+    c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
+    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iPosition"), 2, c.gl.FLOAT, false, 4 * 4, 0)
+    c.gl.enableVertexAttribArray(0)
+    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iNormal"), 2, c.gl.FLOAT, false, 4 * 4, 2 * 4)
+    c.gl.enableVertexAttribArray(1)
+
+    if (this.updated) {
+      const buffer = this.getBuffer(this.maxPoints, this.points[this.points.length - 1].x)
+      c.gl.bufferSubData(c.gl.ARRAY_BUFFER, 0, buffer)
+      this.bufferLength = buffer.length
+    }
+    this.updated = false;
+
+    c.program.use(c.gl)
+    c.program.setUniform1f(c.gl, "uWidth", this.style.width)
+    c.program.setUniform4f(c.gl, "uColor", this.style.colorR, this.style.colorG, this.style.colorB, this.style.colorA)
+
+    c.gl.drawArrays(c.gl.TRIANGLE_STRIP, 0, this.bufferLength / 4)
+    return this.bufferLength / 4
+  }
+
+  private drawCanvas2D(_: Canvas2DContext): number {
     throw new Error("Method not implemented.");
   }
 
-  private drawCanvas2D(_: CanvasRenderingContext2D): number {
-    throw new Error("Method not implemented.");
-  }
-
-  private getVAO(gl: WebGL2RenderingContext): WebGLVertexArrayObject {
+  private getVAO(c: WebGL2Context): WebGLVertexArrayObject {
     if (this.vao) {
       return this.vao
     }
 
-    const vao = gl.createVertexArray()
+    const vao = c.gl.createVertexArray()
     if (!vao) {
       throw new BufferError("Failed to create vertex array")
     }
 
-    gl.bindVertexArray(vao)
-
-    const vbo = gl.createBuffer()
-    if (!vbo) {
-      throw new BufferError("Failed to create vertex buffer")
-    }
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.maxPoints * 16), gl.DYNAMIC_DRAW)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 4 * 4, 0)
-    gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 4 * 4, 2 * 4)
-    gl.enableVertexAttribArray(1)
+    c.gl.bindVertexArray(vao)
+    const vbo = this.getVBO(c)
+    c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
+    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iPosition"), 2, c.gl.FLOAT, false, 4 * 4, 0)
+    c.gl.enableVertexAttribArray(0)
+    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iNormal"), 2, c.gl.FLOAT, false, 4 * 4, 2 * 4)
+    c.gl.enableVertexAttribArray(1)
 
     this.vao = vao
-    this.vbo = vbo
     return vao
   }
 
-  private getVBO(gl: WebGL2RenderingContext | WebGLRenderingContext): WebGLBuffer {
+  private getVBO(c: WebGL2Context | WebGLContext): WebGLBuffer {
     if (this.vbo) {
       return this.vbo
     }
 
-    const vbo = gl.createBuffer()
+    const vbo = c.gl.createBuffer()
     if (!vbo) {
       throw new BufferError("Failed to create vertex buffer")
     }
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.maxPoints * 16), gl.DYNAMIC_DRAW)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 4 * 4, 0)
-    gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 4 * 4, 2 * 4)
-    gl.enableVertexAttribArray(1)
+    c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
+    c.gl.bufferData(c.gl.ARRAY_BUFFER, new Float32Array(this.maxPoints * 16), c.gl.DYNAMIC_DRAW)
 
     this.vbo = vbo
     return vbo
   }
 
   private getBuffer(maxPoints: number, currentTime: number): Float32Array {
-    const pts = this.points.slice(-maxPoints);
+    const pts = this.points.slice(-maxPoints).map(pt => this.mapPoint(pt, currentTime));
     const vertices = new Float32Array(pts.length * 16)
     for (let i = 0; i < pts.length - 1; i++) {
-      const a = this.mapPoint(pts[i], currentTime)
-      const b = this.mapPoint(pts[i + 1], currentTime)
+      const a = pts[i]
+      const b = pts[i + 1]
       const n = this.getNormal(a, b)
       const stride = i * 16
       vertices[stride + 0] = a.x

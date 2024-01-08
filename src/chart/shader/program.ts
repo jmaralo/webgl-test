@@ -30,6 +30,7 @@ export default function defaultProgram(gl: WebGL2RenderingContext | WebGLRenderi
 export class Program {
   private program: WebGLProgram;
   private uniformLocations: { [name: string]: WebGLUniformLocation } = {};
+  private attributeLocations: { [name: string]: { location: number } } = {};
 
   /**
    * Compiles and links a new program from the provided shaders.
@@ -82,6 +83,29 @@ export class Program {
     }
 
     this.uniformLocations[name] = location;
+    return location;
+  }
+
+  /**
+   * Get the location of an attribute variable.
+   * 
+   * Locations are cached to reduce the number of calls to WebGL.
+   * 
+   * @param gl The WebGL context
+   * @param name The name of the attribute variable
+   * @returns The location of the attribute variable
+   */
+  getAttributeLocation(gl: WebGL2RenderingContext | WebGLRenderingContext, name: string): number {
+    if (this.attributeLocations[name]) {
+      return this.attributeLocations[name].location;
+    }
+
+    const location = gl.getAttribLocation(this.program, name);
+    if (location < 0) {
+      throw new UniformError(`Attribute ${name} not found`, name);
+    }
+
+    this.attributeLocations[name] = { location };
     return location;
   }
 

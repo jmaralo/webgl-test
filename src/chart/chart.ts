@@ -7,6 +7,7 @@ import defaultProgram, { Program } from "./shader/program";
 export default class Chart {
   private series: Series[] = [];
   private gl2?: WebGL2RenderingContext;
+  private gl?: WebGLRenderingContext;
   private program?: Program;
 
   /**
@@ -52,6 +53,8 @@ export default class Chart {
   render() {
     if (this.gl2 && this.program) {
       return requestAnimationFrame(this.renderWebGL2(this.gl2, this.program))
+    } else if (this.gl && this.program) {
+      return requestAnimationFrame(this.renderWebGl(this.gl, this.program))
     }
 
     throw new ChartError("Chart not initialized properly")
@@ -72,13 +75,9 @@ export default class Chart {
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.clearColor(0, 0, 0, 0);
 
-      program.use(gl);
-
       let totalDraw = 0;
       for (const s of this.series) {
-        program.setUniform1f(gl, "uWidth", s.style.width)
-        program.setUniform4f(gl, "uColor", s.style.colorR, s.style.colorG, s.style.colorB, s.style.colorA)
-        totalDraw += s.draw(gl)
+        totalDraw += s.draw({ type: "webgl2", gl, program })
       }
       console.log("Drew ", totalDraw, " points in ", deltaTime, "ms")
 
@@ -93,8 +92,32 @@ export default class Chart {
    * 
    * @param gl the webGL context
    */
-  private initWebGL(_: WebGLRenderingContext) {
-    throw new Error("Method not implemented.");
+  private initWebGL(gl: WebGLRenderingContext) {
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+    this.program = defaultProgram(gl);
+    this.gl = gl;
+  }
+
+  private renderWebGl(gl: WebGLRenderingContext, program: Program) {
+    let then = 0
+    const render = (now: DOMHighResTimeStamp) => {
+      const deltaTime = now - then
+      then = now
+
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.clearColor(0, 0, 0, 0);
+
+      let totalDraw = 0;
+      for (const s of this.series) {
+        totalDraw += s.draw({ type: "webgl", gl, program })
+      }
+      console.log("Drew ", totalDraw, " points in ", deltaTime, "ms")
+
+      requestAnimationFrame(render)
+    }
+
+    return render
   }
 
   /**

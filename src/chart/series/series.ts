@@ -1,6 +1,7 @@
+import { DrawingContext } from "../context/context"
 
 export default interface Series {
-  draw(ctx: WebGL2RenderingContext | WebGLRenderingContext | CanvasRenderingContext2D): number
+  draw(ctx: DrawingContext): number
   update(points: Point[]): void
   style: SeriesStyle
 }

@@ -67,7 +67,7 @@ function initContext(canvas: HTMLCanvasElement, options: WebGLContextAttributes 
   desynchronized: false,
 }) {
   try {
-    return canvas.getContext("webgl2", options)
+    return canvas.getContext("webgl", options)
   } catch (e) {
     alert(e)
     return null
