@@ -1,15 +1,17 @@
 import { useCallback, useRef } from "react";
 import Chart from "../chart/chart";
 import LineSeries from "../chart/series/line";
+import { MILLISECOND } from "../chart/series/series";
 
 export type point = {
   data: number,
   timestamp: number,
 }
 function useWebGL() {
-  const series1 = useRef<LineSeries>(new LineSeries());
-  const series2 = useRef<LineSeries>(new LineSeries());
-  const series3 = useRef<LineSeries>(new LineSeries());
+  const timeReference = useRef<number>(Date.now() * MILLISECOND);
+  const series1 = useRef<LineSeries>(new LineSeries(timeReference.current));
+  const series2 = useRef<LineSeries>(new LineSeries(timeReference.current));
+  const series3 = useRef<LineSeries>(new LineSeries(timeReference.current));
 
   return {
     canvasRef: useCallback((canvas: HTMLCanvasElement | null) => {
@@ -46,13 +48,13 @@ function useWebGL() {
     }, []),
 
     setPoints1: (newPoints: point[]) => {
-      series1.current.update(newPoints.map(({timestamp, data}) => ({x: timestamp, y: data})))
+      series1.current.update(newPoints.map(({ timestamp, data }) => ({ x: timestamp, y: data })))
     },
     setPoints2: (newPoints: point[]) => {
-      series2.current.update(newPoints.map(({timestamp, data}) => ({x: timestamp, y: data})))
+      series2.current.update(newPoints.map(({ timestamp, data }) => ({ x: timestamp, y: data })))
     },
     setPoints3: (newPoints: point[]) => {
-      series3.current.update(newPoints.map(({timestamp, data}) => ({x: timestamp, y: data})))
+      series3.current.update(newPoints.map(({ timestamp, data }) => ({ x: timestamp, y: data })))
     },
   } as const
 }
@@ -67,7 +69,7 @@ function initContext(canvas: HTMLCanvasElement, options: WebGLContextAttributes 
   desynchronized: false,
 }) {
   try {
-    return canvas.getContext("webgl", options)
+    return canvas.getContext("webgl2", options)
   } catch (e) {
     alert(e)
     return null

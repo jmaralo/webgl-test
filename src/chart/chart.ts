@@ -79,7 +79,7 @@ export default class Chart {
       for (const s of this.series) {
         totalDraw += s.draw({ type: "webgl2", gl, program })
       }
-      console.log("Drew ", totalDraw, " points in ", deltaTime, "ms")
+      //console.log("Drew ", totalDraw, " points in ", deltaTime, "ms")
 
       requestAnimationFrame(render)
     }
@@ -112,7 +112,7 @@ export default class Chart {
       for (const s of this.series) {
         totalDraw += s.draw({ type: "webgl", gl, program })
       }
-      console.log("Drew ", totalDraw, " points in ", deltaTime, "ms")
+      //console.log("Drew ", totalDraw, " points in ", deltaTime, "ms")
 
       requestAnimationFrame(render)
     }

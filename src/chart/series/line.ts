@@ -1,5 +1,5 @@
 import { CanvasContext as Canvas2DContext, DrawingContext, WebGL2Context, WebGLContext } from "../context/context";
-import Series, { Point, SECOND, SeriesStyle } from "./series"
+import Series, { MILLISECOND, Point, SECOND, SeriesStyle } from "./series"
 
 export default class LineSeries implements Series {
   name: string = "Line"
@@ -11,20 +11,22 @@ export default class LineSeries implements Series {
     width: 0.015,
   }
 
-  timeWindow: number = SECOND * 5;
+  timeReference: number = 0;
+  timeWindow: number = 5 * SECOND;
   maxValue: number = 1.0;
   minValue: number = -1.0;
 
-  readonly maxPoints: number = 50000;
+  readonly maxPoints: number = 100000;
 
   private points: Point[] = []
-  private updated: boolean = false;
+  private buffer: Float32Array = new Float32Array((this.maxPoints - 1) * 16);
 
   private vao?: WebGLVertexArrayObject;
   private vbo?: WebGLBuffer;
-  private bufferLength: number = 0;
 
-  constructor() { }
+  constructor(timeReference: number) {
+    this.timeReference = timeReference
+  }
 
   draw(ctx: DrawingContext): number {
     switch (ctx.type) {
@@ -43,22 +45,23 @@ export default class LineSeries implements Series {
     const vao = this.getVAO(c)
     c.gl.bindVertexArray(vao)
 
-    if (this.updated) {
-      const buffer = this.getBuffer(this.maxPoints, this.points[this.points.length - 1].x)
+    const vertexCount = this.updateBuffer(this.maxPoints, this.timeReference)
 
-      const vbo = this.getVBO(c)
-      c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
-      c.gl.bufferSubData(c.gl.ARRAY_BUFFER, 0, buffer)
-      this.bufferLength = buffer.length
-    }
-    this.updated = false;
+    const vbo = this.getVBO(c)
+    c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
+    c.gl.bufferSubData(c.gl.ARRAY_BUFFER, 0, this.buffer, 0, vertexCount)
 
     c.program.use(c.gl)
     c.program.setUniform1f(c.gl, "uWidth", this.style.width)
+    c.program.setUniform1f(c.gl, "uMinValue", this.minValue)
+    c.program.setUniform1f(c.gl, "uMaxValue", this.maxValue)
+    c.program.setUniform1f(c.gl, "uTimeWindow", this.timeWindow)
+    c.program.setUniform1f(c.gl, "uCurrentTime", (Date.now() * MILLISECOND) - this.timeReference)
+
     c.program.setUniform4f(c.gl, "uColor", this.style.colorR, this.style.colorG, this.style.colorB, this.style.colorA)
 
-    c.gl.drawArrays(c.gl.TRIANGLE_STRIP, 0, this.bufferLength / 4)
-    return this.bufferLength / 4
+    c.gl.drawArrays(c.gl.TRIANGLE_STRIP, 0, vertexCount / 4)
+    return vertexCount / 4
   }
 
   private drawWebGL(c: WebGLContext): number {
@@ -66,22 +69,24 @@ export default class LineSeries implements Series {
     c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
     c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iPosition"), 2, c.gl.FLOAT, false, 4 * 4, 0)
     c.gl.enableVertexAttribArray(0)
-    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iNormal"), 2, c.gl.FLOAT, false, 4 * 4, 2 * 4)
+    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iPositionNext"), 2, c.gl.FLOAT, false, 4 * 4, 2 * 4)
     c.gl.enableVertexAttribArray(1)
 
-    if (this.updated) {
-      const buffer = this.getBuffer(this.maxPoints, this.points[this.points.length - 1].x)
-      c.gl.bufferSubData(c.gl.ARRAY_BUFFER, 0, buffer)
-      this.bufferLength = buffer.length
-    }
-    this.updated = false;
+    const vertexCount = this.updateBuffer(this.maxPoints, this.timeReference)
+
+    c.gl.bufferSubData(c.gl.ARRAY_BUFFER, 0, this.buffer.slice(0, vertexCount))
 
     c.program.use(c.gl)
     c.program.setUniform1f(c.gl, "uWidth", this.style.width)
+    c.program.setUniform1f(c.gl, "uMinValue", this.minValue)
+    c.program.setUniform1f(c.gl, "uMaxValue", this.maxValue)
+    c.program.setUniform1f(c.gl, "uTimeWindow", this.timeWindow)
+    c.program.setUniform1f(c.gl, "uCurrentTime", (Date.now() * MILLISECOND) - this.timeReference)
+
     c.program.setUniform4f(c.gl, "uColor", this.style.colorR, this.style.colorG, this.style.colorB, this.style.colorA)
 
-    c.gl.drawArrays(c.gl.TRIANGLE_STRIP, 0, this.bufferLength / 4)
-    return this.bufferLength / 4
+    c.gl.drawArrays(c.gl.TRIANGLE_STRIP, 0, vertexCount / 4)
+    return vertexCount / 4
   }
 
   private drawCanvas2D(_: Canvas2DContext): number {
@@ -103,7 +108,7 @@ export default class LineSeries implements Series {
     c.gl.bindBuffer(c.gl.ARRAY_BUFFER, vbo)
     c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iPosition"), 2, c.gl.FLOAT, false, 4 * 4, 0)
     c.gl.enableVertexAttribArray(0)
-    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iNormal"), 2, c.gl.FLOAT, false, 4 * 4, 2 * 4)
+    c.gl.vertexAttribPointer(c.program.getAttributeLocation(c.gl, "iPositionNext"), 2, c.gl.FLOAT, false, 4 * 4, 2 * 4)
     c.gl.enableVertexAttribArray(1)
 
     this.vao = vao
@@ -127,53 +132,55 @@ export default class LineSeries implements Series {
     return vbo
   }
 
-  private getBuffer(maxPoints: number, currentTime: number): Float32Array {
-    const pts = this.points.slice(-maxPoints).map(pt => this.mapPoint(pt, currentTime));
-    const vertices = new Float32Array(pts.length * 16)
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i]
-      const b = pts[i + 1]
-      const n = this.getNormal(a, b)
+  private updateBuffer(maxPoints: number, currentTime: number): number {
+    const pts = Math.min(this.points.length, maxPoints)
+    for (let i = 0; i < pts - 1; i++) {
+      const a = this.points[this.points.length - pts + i]
+      const ax = a.x - currentTime
+      const ay = a.y
+      const b = this.points[this.points.length - pts + i + 1]
+      const bx = b.x - currentTime
+      const by = b.y
       const stride = i * 16
-      vertices[stride + 0] = a.x
-      vertices[stride + 1] = a.y
-      vertices[stride + 2] = n.x
-      vertices[stride + 3] = n.y
-      vertices[stride + 4] = a.x
-      vertices[stride + 5] = a.y
-      vertices[stride + 6] = -n.x
-      vertices[stride + 7] = -n.y
-      vertices[stride + 8] = b.x
-      vertices[stride + 9] = b.y
-      vertices[stride + 10] = n.x
-      vertices[stride + 11] = n.y
-      vertices[stride + 12] = b.x
-      vertices[stride + 13] = b.y
-      vertices[stride + 14] = -n.x
-      vertices[stride + 15] = -n.y
+      this.buffer[stride + 0] = ax
+      this.buffer[stride + 1] = ay
+      this.buffer[stride + 2] = bx
+      this.buffer[stride + 3] = by
+      this.buffer[stride + 4] = ax
+      this.buffer[stride + 5] = ay
+      this.buffer[stride + 6] = -bx + (2 * ax)
+      this.buffer[stride + 7] = -by + (2 * ay)
+      this.buffer[stride + 8] = bx
+      this.buffer[stride + 9] = by
+      this.buffer[stride + 10] = -ax + (2 * bx)
+      this.buffer[stride + 11] = -ay + (2 * by)
+      this.buffer[stride + 12] = bx
+      this.buffer[stride + 13] = by
+      this.buffer[stride + 14] = ax
+      this.buffer[stride + 15] = ay
+      
     }
-    return vertices
-  }
-
-  private mapPoint(point: Point, currentTime: number): Point {
-    return {
-      x: (((point.x - currentTime + this.timeWindow) / this.timeWindow) * 2) - 1,
-      y: (((point.y - this.minValue) / (this.maxValue - this.minValue)) * 2) - 1,
-    }
-  }
-
-  private getNormal(a: Point, b: Point): Point {
-    return { x: a.y - b.y, y: b.x - a.x }
+    return (pts - 1) * 16
   }
 
   update(points: Point[]) {
-    if (points.length == 0) {
-      return
-    }
+    const time = (Date.now() * MILLISECOND)
+    const newPoints = []
+    for (let i = 0; i < this.points.length; i++) {
+      if (time - this.points[i].x >= this.timeWindow) {
+        continue
+      }
 
-    const latest = points[points.length - 1].x
-    this.points = this.points.concat(points).filter((pt) => latest - pt.x < this.timeWindow)
-    this.updated = true;
+      newPoints.push(this.points[i])
+    }
+    for (let i = 0; i < points.length; i++) {
+      if (time - points[i].x >= this.timeWindow) {
+        continue
+      }
+
+      newPoints.push(points[i])
+    }
+    this.points = newPoints
   }
 }
 

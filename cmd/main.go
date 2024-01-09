@@ -138,9 +138,8 @@ func newChannel(data func(t int64) float64) *SPMC[DataPoint] {
 	go func() {
 		ticker := time.NewTicker(*dataDelayF)
 
-		start := time.Now().UnixNano()
 		for range ticker.C {
-			t := time.Now().UnixNano() - start
+			t := time.Now().UnixNano()
 			source <- DataPoint{
 				Data:      data(t),
 				Timestamp: uint64(t),
