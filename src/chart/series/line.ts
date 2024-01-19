@@ -8,7 +8,7 @@ export default class LineSeries implements Series {
     colorG: 0,
     colorB: 0,
     colorA: 1,
-    width: 0.015,
+    width: 5,
   }
 
   timeReference: number = 0;
@@ -57,6 +57,8 @@ export default class LineSeries implements Series {
     c.program.setUniform1f(c.gl, "uMaxValue", this.maxValue)
     c.program.setUniform1f(c.gl, "uTimeWindow", this.timeWindow)
     c.program.setUniform1f(c.gl, "uCurrentTime", (Date.now() * MILLISECOND) - this.timeReference)
+    c.program.setUniform1f(c.gl, "uViewportWidth", (c.gl.canvas as HTMLCanvasElement).clientWidth)
+    c.program.setUniform1f(c.gl, "uViewportHeight", (c.gl.canvas as HTMLCanvasElement).clientHeight)
 
     c.program.setUniform4f(c.gl, "uColor", this.style.colorR, this.style.colorG, this.style.colorB, this.style.colorA)
 
@@ -82,6 +84,8 @@ export default class LineSeries implements Series {
     c.program.setUniform1f(c.gl, "uMaxValue", this.maxValue)
     c.program.setUniform1f(c.gl, "uTimeWindow", this.timeWindow)
     c.program.setUniform1f(c.gl, "uCurrentTime", (Date.now() * MILLISECOND) - this.timeReference)
+    c.program.setUniform1f(c.gl, "uViewportWidth", (c.gl.canvas as HTMLCanvasElement).clientWidth)
+    c.program.setUniform1f(c.gl, "uViewportHeight", (c.gl.canvas as HTMLCanvasElement).clientHeight)
 
     c.program.setUniform4f(c.gl, "uColor", this.style.colorR, this.style.colorG, this.style.colorB, this.style.colorA)
 

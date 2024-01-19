@@ -29,19 +29,19 @@ function useWebGL() {
       series1.current.style.colorR = 1
       series1.current.style.colorG = 0
       series1.current.style.colorB = 0
-      series1.current.style.width = 0.01
+      series1.current.style.width = 10
       chart.addSeries(series1.current)
 
       series2.current.style.colorR = 0
       series2.current.style.colorG = 0
       series2.current.style.colorB = 1
-      series2.current.style.width = 0.01
+      series2.current.style.width = 20
       chart.addSeries(series2.current)
 
       series3.current.style.colorR = 0
       series3.current.style.colorG = 1
       series3.current.style.colorB = 0
-      series3.current.style.width = 0.005
+      series3.current.style.width = 5
       chart.addSeries(series3.current)
 
       chart.render()
