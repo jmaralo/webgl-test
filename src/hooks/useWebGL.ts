@@ -1,79 +1,101 @@
 import { useCallback, useRef } from "react";
-import Chart from "../chart/chart";
-import LineSeries from "../chart/series/line";
-import { MILLISECOND } from "../chart/series/series";
+import TimeSeries from "../charts/webgl2/series/time";
+import Chart from "../charts/webgl2/chart";
 
 export type point = {
-  data: number,
-  timestamp: number,
+    value: number,
+    timestamp: number,
 }
+
+const NANOSECONDS = 1
+const MICROSECONDS = 1000 * NANOSECONDS
+const MILLISECONDS = 1000 * MICROSECONDS
+
 function useWebGL() {
-  const timeReference = useRef<number>(Date.now() * MILLISECOND);
-  const series1 = useRef<LineSeries>(new LineSeries(timeReference.current));
-  const series2 = useRef<LineSeries>(new LineSeries(timeReference.current));
-  const series3 = useRef<LineSeries>(new LineSeries(timeReference.current));
+    const timeReference = useRef<number>(Date.now() * MILLISECONDS);
+    const series1 = useRef<TimeSeries | null>(null);
+    const series2 = useRef<TimeSeries | null>(null);
+    const series3 = useRef<TimeSeries | null>(null);
 
-  return {
-    canvasRef: useCallback((canvas: HTMLCanvasElement | null) => {
-      if (!canvas) {
-        return
-      }
+    return {
+        canvasRef: useCallback((canvas: HTMLCanvasElement | null) => {
+            if (!canvas) {
+                return
+            }
 
-      const gl = initContext(canvas)
-      if (!gl) {
-        return
-      }
+            const gl = initContext(canvas)
+            if (!gl) {
+                return
+            }
 
-      const chart = new Chart(gl)
+            const chart = new Chart(gl)
+            series1.current = new TimeSeries(gl, timeReference.current)
+            series2.current = new TimeSeries(gl, timeReference.current)
+            series3.current = new TimeSeries(gl, timeReference.current)
 
-      series1.current.style.colorR = 1
-      series1.current.style.colorG = 0
-      series1.current.style.colorB = 0
-      series1.current.style.width = 10
-      chart.addSeries(series1.current)
+            series1.current.style.color.r = 1
+            series1.current.style.color.g = 0
+            series1.current.style.color.b = 0
+            series1.current.style.lineWidth = 20
+            chart.addNamedSeries("sin", series1.current)
 
-      series2.current.style.colorR = 0
-      series2.current.style.colorG = 0
-      series2.current.style.colorB = 1
-      series2.current.style.width = 20
-      chart.addSeries(series2.current)
+            series2.current.style.color.r = 0
+            series2.current.style.color.g = 0
+            series2.current.style.color.b = 1
+            series2.current.style.lineWidth = 10
+            chart.addNamedSeries("cos", series2.current)
 
-      series3.current.style.colorR = 0
-      series3.current.style.colorG = 1
-      series3.current.style.colorB = 0
-      series3.current.style.width = 5
-      chart.addSeries(series3.current)
+            series3.current.style.color.r = 0
+            series3.current.style.color.g = 1
+            series3.current.style.color.b = 0
+            series3.current.style.lineWidth = 10
+            chart.addNamedSeries("tan", series3.current)
 
-      chart.render()
-    }, []),
+            const render = () => {
+                chart.draw()
 
-    setPoints1: (newPoints: point[]) => {
-      series1.current.update(newPoints.map(({ timestamp, data }) => ({ x: timestamp, y: data })))
-    },
-    setPoints2: (newPoints: point[]) => {
-      series2.current.update(newPoints.map(({ timestamp, data }) => ({ x: timestamp, y: data })))
-    },
-    setPoints3: (newPoints: point[]) => {
-      series3.current.update(newPoints.map(({ timestamp, data }) => ({ x: timestamp, y: data })))
-    },
-  } as const
+                requestAnimationFrame(render)
+            }
+
+            requestAnimationFrame(render)
+        }, []),
+
+        setPoints1: (newPoints: point[]) => {
+            if (!series1.current) {
+                return
+            }
+            series1.current.updatePoints(newPoints)
+        },
+        setPoints2: (newPoints: point[]) => {
+            if (!series2.current) {
+                return
+            }
+            series2.current.updatePoints(newPoints)
+        },
+        setPoints3: (newPoints: point[]) => {
+            if (!series3.current) {
+                return
+            }
+            series3.current.updatePoints(newPoints)
+        },
+    } as const
 }
 
 function initContext(canvas: HTMLCanvasElement, options: WebGLContextAttributes = {
-  alpha: false,
-  antialias: true,
-  depth: false,
-  stencil: false,
-  powerPreference: "high-performance",
-  failIfMajorPerformanceCaveat: true,
-  desynchronized: false,
+    alpha: false,
+    antialias: true,
+    depth: false,
+    stencil: false,
+    powerPreference: "high-performance",
+    failIfMajorPerformanceCaveat: true,
+    desynchronized: false,
 }) {
-  try {
-    return canvas.getContext("webgl2", options)
-  } catch (e) {
-    alert(e)
-    return null
-  }
+    try {
+        return canvas.getContext("webgl2", options)
+    } catch (e) {
+        alert(e)
+        return null
+    }
 }
 
 export default useWebGL;

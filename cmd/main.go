@@ -76,7 +76,7 @@ func main() {
 }
 
 type DataPoint struct {
-	Data      float64 `json:"data"`
+	Data      float64 `json:"value"`
 	Timestamp uint64  `json:"timestamp"`
 }
 

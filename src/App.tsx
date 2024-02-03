@@ -26,7 +26,7 @@ function App() {
 
   return (
     <>
-      <canvas width="1200" height="800" ref={canvasRef} />
+      <canvas width={window.innerWidth} height={window.innerHeight} ref={canvasRef} />
     </>
   )
 }
