@@ -29,6 +29,9 @@ type Style = {
 
 }
 
+const reasonableXDifference = 0.0001
+const webGLRangeX = 2
+
 export default class TimeSeries implements Series {
     style: Style = {
         color: {
@@ -50,6 +53,7 @@ export default class TimeSeries implements Series {
 
     private timeReference: number
     private timeWindow = 5 * SECONDS
+    private reasonableTimeDifference = this.timeWindow * reasonableXDifference / webGLRangeX
 
     private context: WebGL2RenderingContext
     private program: Program = new Program([
@@ -128,7 +132,7 @@ export default class TimeSeries implements Series {
         const firstCurrentPointInRange = this.findFirstInTimeRange(this.points, currentRelativeTime)
         const firstNewPointInRange = this.findFirstInTimeRange(newPoints, currentRelativeTime)
         this.points = this.mergeSortedPointsInRange(this.points, newPoints, firstCurrentPointInRange, firstNewPointInRange)
-        this.vertexBuffer.bufferPoints(this.context, this.points)
+        this.vertexBuffer.bufferPoints(this.context, this.points, this.reasonableTimeDifference)
     }
 
     private mapTimestampToReference(points: Point[]) {
@@ -236,29 +240,53 @@ class VertexBufferObject extends VertexBufferObjectBase {
         context.bufferData(context.ARRAY_BUFFER, this.buffer, context.DYNAMIC_DRAW)
     }
 
-    bufferPoints(context: WebGL2RenderingContext, points: Point[]) {
-        this.vertexCount = points.length * 2
-
-        if (points.length < 2) {
+    bufferPoints(context: WebGL2RenderingContext, points: Point[], timeDifference: number) {
+        this.vertexCount = 0
+        if (points.length < 1) {
             this.clearPoints()
-            this.writeBufferToGPU(context)
-            return
+        } else {
+            this.bufferSpacedPoints(points, timeDifference)
         }
-
-        this.writePointAt(0, mirrorPointAcross(points[1], points[0]), points[0], points[1])
-        for (let i = 1; i < points.length - 1; i++) {
-            this.writePointAt(i * this.pointStride, points[i - 1], points[i], points[i + 1])
-        }
-        const last = points.length - 1
-        this.writePointAt(last * this.pointStride, points[last - 1], points[last], mirrorPointAcross(points[last - 1], points[last]))
 
         this.writeBufferToGPU(context)
     }
+
 
     clearPoints() {
         for (let i = 0; i < this.buffer.length; i++) {
             this.buffer[i] = 0.0
         }
+    }
+
+    bufferSpacedPoints(points: Point[], timeDifference: number) {
+        let nextPointer = this.findNextSpacedPoint(points, 0, timeDifference)
+        if (nextPointer >= points.length) {
+            this.clearPoints()
+            return
+        }
+
+        let previous = mirrorPointAcross(points[nextPointer], points[0])
+        let current = points[0]
+        let next = points[nextPointer]
+        let writePosition = 0;
+        while (nextPointer < points.length) {
+            next = points[nextPointer]
+            this.writePointAt(writePosition * this.pointStride, previous, current, next)
+            this.vertexCount += 2
+            writePosition++
+            previous = current
+            current = next
+            nextPointer = this.findNextSpacedPoint(points, nextPointer, timeDifference)
+        }
+    }
+
+    findNextSpacedPoint(points: Point[], from: number, timeDifference: number): number {
+        let current = points[from]
+        let pointer = from + 1
+        while (pointer < points.length && points[pointer].timestamp - current.timestamp < timeDifference) {
+            pointer++;
+        }
+        return pointer
     }
 
     private writePointAt(position: number, previous: Point, current: Point, next: Point) {
