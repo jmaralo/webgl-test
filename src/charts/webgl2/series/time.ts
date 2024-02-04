@@ -18,26 +18,27 @@ type Point = {
     value: number,
 }
 
-type Style = {
-    color: {
-        r: number,
-        g: number,
-        b: number,
-        a: number,
-    },
-    lineWidth: number
+type RGBA = {
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+}
 
+type Style = {
+    color: RGBA,
+    lineWidth: number,
 }
 
 const reasonableXDifference = 0.0001
 const webGLRangeX = 2
 
 export default class TimeSeries implements Series {
-    style: Style = {
+    private style: Style = {
         color: {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
+            r: 0xee / 255,
+            g: 0x76 / 255,
+            b: 0x23 / 255,
             a: 1.0,
         },
         lineWidth: 5,
@@ -95,6 +96,34 @@ export default class TimeSeries implements Series {
             },
         ])
         this.timeReference = timeReference
+    }
+
+    setLineColor(red: number, green: number, blue: number, alpha: number) {
+        this.style.color.r = red
+        this.style.color.g = green
+        this.style.color.b = blue
+        this.style.color.a = alpha
+    }
+
+    setLineWidth(width: number) {
+        this.style.lineWidth = width
+    }
+
+    setValueHigh(high: number) {
+        this.valueHigh = high
+    }
+
+    setValueLow(low: number) {
+        this.valueLow = low
+    }
+
+    setTimeWindow(window: number) {
+        this.timeWindow = window
+        this.reasonableTimeDifference = this.getReasonableTimeInterval(window)
+    }
+
+    private getReasonableTimeInterval(window: number): number {
+        return window * reasonableXDifference / webGLRangeX
     }
 
     draw() {

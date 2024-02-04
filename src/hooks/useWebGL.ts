@@ -33,22 +33,16 @@ function useWebGL() {
             series2.current = new TimeSeries(gl, timeReference.current)
             series3.current = new TimeSeries(gl, timeReference.current)
 
-            series1.current.style.color.r = 1
-            series1.current.style.color.g = 0
-            series1.current.style.color.b = 0
-            series1.current.style.lineWidth = 20
+            series1.current.setLineColor(1, 0, 0, 1)
+            series1.current.setLineWidth(10)
             chart.addNamedSeries("sin", series1.current)
 
-            series2.current.style.color.r = 0
-            series2.current.style.color.g = 0
-            series2.current.style.color.b = 1
-            series2.current.style.lineWidth = 10
+            series2.current.setLineColor(0, 0, 1, 1)
+            series2.current.setLineWidth(10)
             chart.addNamedSeries("cos", series2.current)
 
-            series3.current.style.color.r = 0
-            series3.current.style.color.g = 1
-            series3.current.style.color.b = 0
-            series3.current.style.lineWidth = 10
+            series3.current.setLineColor(0, 1, 0, 1)
+            series3.current.setLineWidth(10)
             chart.addNamedSeries("tan", series3.current)
 
             const render = () => {
