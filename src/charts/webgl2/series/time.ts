@@ -126,22 +126,19 @@ export default class TimeSeries implements Series {
         return window * reasonableXDifference / webGLRangeX
     }
 
-    draw() {
+    draw(container: HTMLElement) {
         this.vertexArray.bind(this.context)
         this.program.use(this.context)
 
-        this.loadUniforms()
+        this.loadUniforms(container)
 
         this.context.drawArrays(this.context.TRIANGLE_STRIP, 0, this.vertexBuffer.vertexCount)
     }
 
-    private loadUniforms() {
-        let viewportWidth = this.context.canvas.width
-        let viewportHeight = this.context.canvas.height
-        if (this.context.canvas instanceof HTMLCanvasElement) {
-            viewportWidth = this.context.canvas.clientWidth
-            viewportHeight = this.context.canvas.clientHeight
-        }
+    private loadUniforms(container: HTMLElement) {
+        const rect = container.getBoundingClientRect()
+        const viewportWidth = rect.width
+        const viewportHeight = rect.height
         this.program.setUniform1f(this.context, "uViewport.width", viewportWidth)
         this.program.setUniform1f(this.context, "uViewport.height", viewportHeight)
 

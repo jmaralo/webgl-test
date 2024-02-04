@@ -1,3 +1,3 @@
 export default interface Series {
-    draw(): void
+    draw(container: HTMLElement): void
 }

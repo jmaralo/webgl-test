@@ -9,7 +9,7 @@ type Message = {
 }
 
 function App() {
-  const { canvasRef, setPoints1, setPoints2, setPoints3 } = useWebGL()
+  const { canvasRef, containerRef1, containerRef2, setPoints1, setPoints2, setPoints3 } = useWebGL()
 
   useEffect(() => {
     const socket = new WS('ws://localhost:8080', (msg) => {
@@ -26,7 +26,9 @@ function App() {
 
   return (
     <>
-      <canvas width={window.innerWidth} height={window.innerHeight} ref={canvasRef} />
+      <canvas width={window.innerWidth} height={window.innerHeight} ref={canvasRef}/>
+      <div id="chart-container-1" ref={containerRef1}></div>
+      <div id="chart-container-2" ref={containerRef2}></div>
     </>
   )
 }

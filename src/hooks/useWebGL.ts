@@ -16,6 +16,8 @@ function useWebGL() {
     const series1 = useRef<TimeSeries | null>(null);
     const series2 = useRef<TimeSeries | null>(null);
     const series3 = useRef<TimeSeries | null>(null);
+    const containerRef1 = useRef<HTMLDivElement | null>(null);
+    const containerRef2 = useRef<HTMLDivElement | null>(null);
 
     return {
         canvasRef: useCallback((canvas: HTMLCanvasElement | null) => {
@@ -32,6 +34,7 @@ function useWebGL() {
             series1.current = new TimeSeries(gl, timeReference.current)
             series2.current = new TimeSeries(gl, timeReference.current)
             series3.current = new TimeSeries(gl, timeReference.current)
+            chart.setBackgroundColor(0.1, 0.1, 0.1, 1.0)
 
             series1.current.setLineColor(1, 0, 0, 1)
             series1.current.setLineWidth(10)
@@ -46,13 +49,21 @@ function useWebGL() {
             chart.addNamedSeries("tan", series3.current)
 
             const render = () => {
-                chart.draw()
+                if (containerRef1.current) {
+                    chart.draw(containerRef1.current)
+                }
+                if (containerRef2.current) {
+                    chart.draw(containerRef2.current)
+                }
 
                 requestAnimationFrame(render)
             }
 
             requestAnimationFrame(render)
         }, []),
+
+        containerRef1,
+        containerRef2,
 
         setPoints1: (newPoints: point[]) => {
             if (!series1.current) {
@@ -76,13 +87,13 @@ function useWebGL() {
 }
 
 function initContext(canvas: HTMLCanvasElement, options: WebGLContextAttributes = {
-    alpha: false,
+    alpha: true,
     antialias: true,
     depth: false,
     stencil: false,
     powerPreference: "high-performance",
     failIfMajorPerformanceCaveat: true,
-    desynchronized: false,
+    desynchronized: true,
 }) {
     try {
         return canvas.getContext("webgl2", options)
